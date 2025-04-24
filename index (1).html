@@ -1,0 +1,228 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Social Media Life Adventure</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
+    <h1 class="text-2xl font-bold text-center mb-4">Social Media Life Adventure</h1>
+    <p class="text-center text-gray-600 mb-4">Make choices to shape your online identity and mental health!</p>
+
+    <!-- Stats Display -->
+    <div id="stats" class="mb-4">
+      <p><strong>Self-Esteem:</strong> <span id="selfEsteem">50</span>/100</p>
+      <p><strong>Mental Health:</strong> <span id="mentalHealth">50</span>/100</p>
+      <p><strong>Followers:</strong> <span id="followers">100</span></p>
+      <p><strong>Likes:</strong> <span id="likes">0</span></p>
+    </div>
+
+    <!-- Story Display -->
+    <div id="story" class="mb-4 p-4 bg-gray-50 rounded">
+      <p id="storyText">You wake up and check your social media. A notification pops up: a friend posted a stunning vacation photo. What do you do?</p>
+    </div>
+
+    <!-- Choices -->
+    <div id="choices" class="flex flex-col space-y-2"></div>
+
+    <!-- Game Over Message -->
+    <div id="gameOver" class="hidden text-center text-red-600 font-semibold"></div>
+
+    <!-- Restart Button -->
+    <button id="restart" class="hidden mt-4 w-full bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">Restart Game</button>
+  </div>
+
+  <script>
+    // Game state
+    let state = {
+      selfEsteem: 50,
+      mentalHealth: 50,
+      followers: 100,
+      likes: 0,
+      stage: 0
+    };
+
+    // Story stages
+    const stages = [
+      {
+        text: "You wake up and check your social media. A friend posted a stunning vacation photo. What do you do?",
+        choices: [
+          { text: "Like and comment positively", effect: { selfEsteem: 5, mentalHealth: 5, likes: 10, followers: 5 }, nextStage: 1 },
+          { text: "Compare yourself and feel inadequate", effect: { selfEsteem: -10, mentalHealth: -10 }, nextStage: 1 },
+          { text: "Ignore and post your own photo", effect: { selfEsteem: 0, mentalHealth: -5, likes: 20, followers: 10 }, nextStage: 1 }
+        ]
+      },
+      {
+        text: "You post a selfie. It gets some likes, but a follower comments negatively about your appearance. How do you respond?",
+        choices: [
+          { text: "Delete the comment and block the user", effect: { selfEsteem: -5, mentalHealth: -5, followers: -10 }, nextStage: 2 },
+          { text: "Respond kindly and move on", effect: { selfEsteem: 10, mentalHealth: 5, followers: 5 }, nextStage: 2 },
+          { text: "Feel hurt and stop posting", effect: { selfEsteem: -15, mentalHealth: -15 }, nextStage: 2 }
+        ]
+      },
+      {
+        text: "Your post goes viral, gaining tons of likes and followers! But you notice you're spending hours scrolling. What's next?",
+        choices: [
+          { text: "Keep engaging to maintain popularity", effect: { selfEsteem: 5, mentalHealth: -10, likes: 50, followers: 20 }, nextStage: 3 },
+          { text: "Take a break to focus on yourself", effect: { selfEsteem: 10, mentalHealth: 15, likes: -10, followers: -5 }, nextStage: 3 },
+          { text: "Post more to chase the high", effect: { selfEsteem: -5, mentalHealth: -15, likes: 30, followers: 15 }, nextStage: 3 }
+        ]
+      },
+      {
+        text: "You join a supportive online community. They invite you to share your true self. What do you share?",
+        choices: [
+          { text: "An authentic story about your struggles", effect: { selfEsteem: 15, mentalHealth: 15, likes: 20, followers: 10 }, nextStage: 4 },
+          { text: "A curated, perfect image", effect: { selfEsteem: 5, mentalHealth: -5, likes: 40, followers: 15 }, nextStage: 4 },
+          { text: "Decline to share, feeling shy", effect: { selfEsteem: -10, mentalHealth: -5 }, nextStage: 4 }
+        ]
+      },
+      {
+        text: "End of the day. Reflecting on your social media use, you realize it’s shaped your identity. How do you feel?",
+        choices: [
+          { text: "Balanced and confident", effect: { selfEsteem: 10, mentalHealth: 10 }, nextStage: 5 },
+          { text: "Overwhelmed and dependent", effect: { selfEsteem: -10, mentalHealth: -10 }, nextStage: 5 },
+          { text: "Inspired to use it mindfully", effect: { selfEsteem: 15, mentalHealth: 15 }, nextStage: 5 }
+        ]
+      }
+    ];
+
+    // Update stats display
+    function updateStats() {
+      document.getElementById('selfEsteem').textContent = state.selfEsteem;
+      document.getElementById('mentalHealth').textContent = state.mentalHealth;
+      document.getElementById('followers').textContent = state.followers;
+      document.getElementById('likes').textContent = state.likes;
+    }
+
+    // Display choices
+    function displayChoices() {
+      const choicesDiv = document.getElementById('choices');
+      choicesDiv.innerHTML = '';
+      if (state.stage >= stages.length) return;
+
+      stages[state.stage].choices.forEach((choice, index) => {
+        const button = document.createElement('button');
+        button.className = 'w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600';
+        button.textContent = choice.text;
+        button.onclick = () => makeChoice(index);
+        choicesDiv.appendChild(button);
+      });
+    }
+
+    // Handle choice
+    function makeChoice(choiceIndex) {
+      const choice = stages[state.stage].choices[choiceIndex];
+      state.selfEsteem = Math.min(100, Math.max(0, state.selfEsteem + (choice.effect.selfEsteem || 0)));
+      state.mentalHealth = Math.min(100, Math.max(0, state.mentalHealth + (choice.effect.mentalHealth || 0)));
+      state.followers = Math.max(0, state.followers + (choice.effect.followers || 0));
+      state.likes = Math.max(0, state.likes + (choice.effect.likes || 0));
+      state.stage = choice.nextStage;
+
+      updateStats();
+      checkGameOver();
+
+      if (state.stage < stages.length && !document.getElementById('gameOver').classList.contains('hidden')) {
+        document.getElementById('storyText').textContent = stages[state.stage].text;
+        displayChoices();
+      } else {
+        endGame();
+      }
+    }
+
+    // Check game over conditions
+    function checkGameOver() {
+      const gameOverDiv = document.getElementById('gameOver');
+      if (state.selfEsteem <= 0) {
+        gameOverDiv.textContent = "Your self-esteem is too low! Game Over. Try making positive choices.";
+        gameOverDiv.classList.remove('hidden');
+        document.getElementById('choices').innerHTML = '';
+        document.getElementById('restart').classList.remove('hidden');
+      } else if (state.mentalHealth <= 0) {
+        gameOverDiv.textContent = "Your mental health needs attention! Game Over. Balance your social media use.";
+        gameOverDiv.classList.remove('hidden');
+        document.getElementById('choices').innerHTML = '';
+        document.getElementById('restart').classList.remove('hidden');
+      } else if (state.selfEsteem >= 100) {
+        gameOverDiv.textContent = "You’ve built a confident identity! You win! Mindful choices paid off.";
+        gameOverDiv.classList.remove('hidden');
+        document.getElementById('choices').innerHTML = '';
+        document.getElementById('restart').classList.remove('hidden');
+      }
+    }
+
+    // End game
+    function endGame() {
+      if (state.stage >= stages.length) {
+        const gameOverDiv = document.getElementById('gameOver');
+        gameOverDiv.textContent = state.selfEsteem > 50 && state.mentalHealth > 50
+          ? "You’ve navigated social media wisely! Your identity shines. You win!"
+          : "You’ve reached the end, but your identity feels shaky. Try again!";
+        gameOverDiv.classList.remove('hidden');
+        document.getElementById('choices').innerHTML = '';
+        document.getElementById('restart').classList.remove('hidden');
+      }
+    }
+
+    // Restart game
+    document.getElementById('restart').onclick = () => {
+      state = {
+        selfEsteem: 50,
+        mentalHealth: 50,
+        followers: 100,
+        likes: 0,
+        stage: 0
+      };
+      document.getElementById('storyText').textContent = stages[0].text;
+      document.getElementById('gameOver').classList.add('hidden');
+      document.getElementById('restart').classList.add('hidden');
+      updateStats();
+      displayChoices();
+    };
+
+    // Initialize game
+    updateStats();
+    displayChoices();
+  </script>
+</body>
+</html>
